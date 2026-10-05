@@ -1,0 +1,1 @@
+# O núcleo do projeto usa só a biblioteca padrão.
