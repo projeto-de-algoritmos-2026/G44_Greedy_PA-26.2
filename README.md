@@ -8,8 +8,8 @@ Dada a oferta de turmas de um semestre da UnB, quantas salas são necessárias, 
 
 | Matrícula | Aluno |
 |---|---|
-| _a preencher_ | Giovanni Dornelas Ferreira |
-| _a preencher_ | _a preencher_ |
+| 232002664 | Giovanni Dornelas Ferreira |
+| 231011097 | André Ricardo Meyer de Melo |
 
 ## Sobre
 
