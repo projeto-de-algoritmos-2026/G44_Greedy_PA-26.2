@@ -1,1 +1,3 @@
 # O núcleo do projeto usa só a biblioteca padrão.
+# Dependência somente para gerar gráficos estáticos.
+matplotlib>=3.8,<4

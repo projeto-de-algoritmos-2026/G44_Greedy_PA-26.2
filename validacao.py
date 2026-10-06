@@ -10,6 +10,7 @@ from pathlib import Path
 from time import perf_counter
 
 from src.dados import carregar_aulas
+from src.capacidade import alocar_com_capacidade, capacidades_minimas, excessos_de_capacidade
 from src.exato import MAX_AULAS, minimo_de_salas
 from src.guloso import alocar
 from src.limite import profundidade
@@ -33,7 +34,7 @@ def carregar_estrategias():
     for nome, funcao in pares:
         if not isinstance(nome, str) or not nome or not callable(funcao):
             raise ValueError("ESTRATEGIAS deve conter pares de nome e função de alocação")
-        if nome in estrategias or nome in {"guloso", "limite"}:
+        if nome in estrategias or nome in {"guloso", "limite", "capacidade_best_fit"}:
             raise ValueError(f"nome de estratégia duplicado ou reservado: {nome!r}")
         estrategias[nome] = funcao
     if not estrategias:
@@ -115,6 +116,28 @@ def salvar_csv(caminho, campos, registros):
         escritor.writerows(registros)
 
 
+def dimensionar_capacidades(aulas, alocacoes, capacidades=None):
+    """Dimensiona as salas de cada estratégia e verifica o inventário quando usado."""
+    por_estrategia = {}
+    for registro in alocacoes:
+        por_estrategia.setdefault(registro["estrategia"], []).append(registro)
+    resultados = []
+    for nome, registros in por_estrategia.items():
+        registros.sort(key=lambda registro: registro["indice_aula"])
+        salas = [registro["sala"] for registro in registros]
+        minimas = capacidades_minimas(aulas, salas)
+        if nome == "capacidade_best_fit":
+            if capacidades is None or excessos_de_capacidade(aulas, salas, capacidades):
+                raise ValueError("a alocação com capacidade excedeu o inventário informado")
+        for sala in sorted(set(salas)):
+            disponivel = capacidades[sala] if nome == "capacidade_best_fit" else ""
+            resultados.append({"estrategia": nome, "sala": sala,
+                               "capacidade_minima": minimas[sala],
+                               "capacidade_informada": disponivel,
+                               "adequada": minimas[sala] <= disponivel if disponivel != "" else ""})
+    return resultados
+
+
 def imprimir_tabela(registros, campos):
     linhas = [[str(registro[campo]) for campo in campos] for registro in registros]
     larguras = [max([len(campo)] + [len(linha[i]) for linha in linhas])
@@ -131,13 +154,18 @@ def main(argv=None):
     parser.add_argument("--amostras", type=int, default=10)
     parser.add_argument("--tamanho", type=int, default=12)
     parser.add_argument("--semente", type=int, default=44)
+    parser.add_argument("--capacidades", type=int, nargs="+",
+                        help="inventário opcional: capacidade da sala 0, sala 1, etc.")
     args = parser.parse_args(argv)
     if args.amostras < 0 or not 1 <= args.tamanho <= MAX_AULAS:
         parser.error(f"--amostras deve ser >= 0 e --tamanho deve estar entre 1 e {MAX_AULAS}")
     try:
         aulas = carregar_aulas(args.caminho)
         estrategias = carregar_estrategias()
+        if args.capacidades is not None:
+            estrategias["capacidade_best_fit"] = lambda aulas: alocar_com_capacidade(aulas, args.capacidades)
         resumo, alocacoes = comparar(aulas, estrategias)
+        capacidades = dimensionar_capacidades(aulas, alocacoes, args.capacidades)
         amostras = validar_subamostras(aulas, args.amostras, args.tamanho, args.semente)
         args.saida.mkdir(parents=True, exist_ok=True)
         salvar_csv(args.saida / "resumo.csv",
@@ -150,6 +178,9 @@ def main(argv=None):
                    ["amostra", "semente", "indices_aulas", "aulas", "limite", "salas_guloso",
                     "salas_exato", "conflitos", "confere", "tempo_guloso_ms", "tempo_exato_ms"],
                    amostras)
+        salvar_csv(args.saida / "capacidades.csv",
+                   ["estrategia", "sala", "capacidade_minima", "capacidade_informada", "adequada"],
+                   capacidades)
     except (OSError, ValueError, AttributeError) as erro:
         parser.exit(1, f"Erro: {erro}\n")
 

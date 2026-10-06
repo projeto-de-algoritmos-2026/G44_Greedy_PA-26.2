@@ -153,11 +153,44 @@ na ordem de entrada usa três salas, enquanto o guloso usa apenas duas.
 O resultado de 28 salas considera salas intercambiáveis; capacidade,
 equipamentos e deslocamento entre locais não são restrições deste modelo.
 
+O dimensionamento dessa alocação gulosa exige capacidades entre **10 e
+131 vagas por sala**, somando **2.947 lugares** nas 28 salas. Cada valor
+é o maior número de vagas de uma aula atribuída à sala durante a semana.
+Essa soma descreve a alocação obtida; não é uma prova de que a soma de
+capacidades seja mínima. Sem um inventário físico, não podemos afirmar
+que as salas existentes no campus comportam essa distribuição.
+
+![Comparação das estratégias na coleta real](docs/graficos/comparacao_salas.png)
+
+![Aulas simultâneas ao longo da semana](docs/graficos/ocupacao_por_dia.png)
+
+![Dimensionamento das salas na alocação gulosa](docs/graficos/capacidades_guloso.png)
+
+As figuras versionadas correspondem à coleta descrita acima. Os arquivos
+SVG para exportação também estão em [docs/graficos/](docs/graficos/).
+
+### Capacidade das salas
+
+[src/capacidade.py](src/capacidade.py) implementa
+`capacidades_minimas(aulas, salas)`, que dimensiona cada sala de uma
+alocação, e `excessos_de_capacidade(aulas, salas, capacidades)`, que retorna
+os índices das aulas que excedem a capacidade informada.
+
+Com um inventário fornecido, `alocar_com_capacidade(aulas, capacidades)`
+processa as aulas por início e escolhe a menor sala livre que comporte
+suas vagas. Nos empates de início, prioriza mais vagas. A posição na lista
+de capacidades identifica a mesma sala física em todos os dias.
+O tempo é **O(n log n + n·s)**, para `s` salas disponíveis.
+
+Essa estratégia é uma heurística: pode falhar mesmo quando existe uma
+alocação viável e não tem a prova de otimalidade do particionamento sem
+restrições. Uma falha informa essa limitação e encerra a execução com erro.
+
 ## Instalação
 
 Requer Python 3.10 ou mais novo. Os comandos rodam da raiz do repositório.
-O projeto usa apenas a biblioteca padrão; `requirements.txt` não contém
-dependências externas.
+Os algoritmos e a validação usam a biblioteca padrão. A geração de
+gráficos requer Matplotlib, declarado em `requirements.txt`.
 
 No Windows, com PowerShell:
 
@@ -181,12 +214,14 @@ Com o CSV da coleta em `data/raw/turmas_gama_2026_2.csv`, execute:
 
 ```bash
 python validacao.py
+python graficos.py
 ```
 
 Para experimentar sem a coleta real, use o CSV fictício versionado:
 
 ```bash
 python validacao.py tests/turmas_exemplo.csv --saida resultados/exemplo --amostras 3 --tamanho 6 --semente 44
+python graficos.py resultados/exemplo
 ```
 
 O exemplo contém horários ausentes e inválidos para demonstrar o relato
@@ -201,6 +236,7 @@ As opções disponíveis são:
 | `--amostras` | Quantidade de subamostras; zero desativa a busca exata. | `10` |
 | `--tamanho` | Máximo de aulas por amostra, entre 1 e 12. | `12` |
 | `--semente` | Semente do sorteio reproduzível das subamostras. | `44` |
+| `--capacidades` | Capacidades do inventário, na ordem sala 0, sala 1, etc.; acrescenta a estratégia `capacidade_best_fit`. | Não informado |
 
 O tamanho efetivo de cada amostra é limitado pela quantidade de aulas da
 entrada. Consulte também `python validacao.py --help`.
@@ -212,6 +248,7 @@ Por padrão, a execução imprime duas tabelas e salva:
 | `resumo.csv` | Aulas, salas, limite, excesso de salas, conflitos e tempo por estratégia. |
 | `alocacoes.csv` | Estratégia, índice original da aula, turma, dia, início, fim, vagas e sala. |
 | `subamostras.csv` | Índices e semente do sorteio, resultados do guloso e exato, limite, concordância e tempos. |
+| `capacidades.csv` | Capacidade mínima por sala e estratégia; capacidade informada e adequação quando o inventário é usado. |
 
 Esses arquivos são recriados a cada execução no diretório escolhido.
 `resultados/` não é versionado. No resumo, `excesso = salas - limite` e
@@ -219,6 +256,29 @@ Esses arquivos são recriados a cada execução no diretório escolhido.
 limite tem o campo de conflitos vazio, pois não representa uma alocação.
 O programa termina com código 1 se encontrar conflitos, divergências nas
 subamostras ou um erro que impeça a validação completa.
+
+Para testar um inventário **fictício** de duas salas com 40 e 80 lugares:
+
+```bash
+python validacao.py tests/turmas_exemplo.csv --saida resultados/exemplo --capacidades 40 80
+```
+
+O guloso e as linhas de base continuam avaliados no modelo de salas
+intercambiáveis. Somente `capacidade_best_fit` usa o inventário fornecido.
+Para ela, a profundidade é um limite inferior, sem garantia de ser atingível
+com aquelas capacidades. Os campos de capacidade informada e adequação
+das outras estratégias ficam vazios.
+
+`graficos.py` lê os CSVs da validação e salva quatro figuras em PNG e SVG:
+comparação de salas, tempos, ocupação diária e dimensionamento do guloso.
+A saída padrão é `<diretório de resultados>/graficos/`; use `--saida` para
+alterá-la. O gráfico de tempos retrata uma única execução, sem constituir
+um benchmark. Para regenerar as figuras versionadas com a coleta real:
+
+```bash
+python validacao.py
+python graficos.py --saida docs/graficos
+```
 
 ### Usar os módulos diretamente
 
@@ -266,6 +326,10 @@ Os testes de dados reais são pulados quando
 versionados, arquivos temporários e instâncias aleatórias com semente fixa.
 Há comparações do guloso com a profundidade e a busca exata, e da seleção
 de reservas com enumeração de subconjuntos por força bruta.
+Os testes de capacidade verificam conflitos, reutilização entre dias e
+limites de vagas. Os de gráficos conferem os eventos de intervalos
+semiabertos e a exportação dos arquivos; a exportação é pulada se
+Matplotlib não estiver instalado.
 
 ## Apresentação
 

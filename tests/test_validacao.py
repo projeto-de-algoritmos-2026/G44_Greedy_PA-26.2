@@ -97,6 +97,20 @@ class TestValidacao(unittest.TestCase):
                 amostras = list(csv.DictReader(arquivo))
             self.assertEqual(len(amostras), 2)
             self.assertTrue(all(r["confere"] == "True" for r in amostras))
+            with (saida / "capacidades.csv").open(encoding="utf-8", newline="") as arquivo:
+                capacidades = list(csv.DictReader(arquivo))
+            self.assertEqual(len(capacidades), 1 + len(ESTRATEGIAS))
+            self.assertTrue(all(r["capacidade_minima"] == "40" for r in capacidades))
+
+    def test_dimensiona_e_verifica_inventario(self):
+        estrategias = {"capacidade_best_fit": lambda aulas: [0, 1, 1]}
+        _, alocacoes = validacao.comparar(self.aulas, estrategias)
+        linhas = validacao.dimensionar_capacidades(self.aulas, alocacoes, [30, 50])
+        inventario = [r for r in linhas if r["estrategia"] == "capacidade_best_fit"]
+        self.assertEqual([r["capacidade_minima"] for r in inventario], [30, 50])
+        self.assertTrue(all(r["adequada"] for r in inventario))
+        with self.assertRaises(ValueError):
+            validacao.dimensionar_capacidades(self.aulas, alocacoes, [30, 40])
 
     def test_comando_retorna_falha_se_baseline_tem_conflitos(self):
         with tempfile.TemporaryDirectory() as diretorio:
