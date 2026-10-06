@@ -333,8 +333,9 @@ Matplotlib não estiver instalado.
 
 ## Apresentação
 
-**Vídeo de apresentação:** ainda não gravado. O link será incluído após
-a gravação e publicação pela equipe.
+[![Vídeo de apresentação](https://img.youtube.com/vi/esSE6Cv0EB4/hqdefault.jpg)](https://youtu.be/esSE6Cv0EB4)
+
+Assista no YouTube: <https://youtu.be/esSE6Cv0EB4>
 
 ## Referências
 
