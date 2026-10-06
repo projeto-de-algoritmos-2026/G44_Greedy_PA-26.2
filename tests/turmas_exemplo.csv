@@ -1,0 +1,9 @@
+turma,disciplina,horario,vagas
+A-01,"Disciplina A, introdutória",35T23,40
+SEM-01,Disciplina sem horário,,20
+INV-01,Disciplina com código inválido,SEM_HORARIO,30
+SEM-02,Disciplina com horário em branco,   ,10
+INV-02,Disciplina com posição inexistente,2M6,15
+INV-03,Disciplina com bloco parcialmente válido,2M12 9T1,25
+B-02,Disciplina com vários blocos,24M12 6T34,30
+C-01,Disciplina que atravessa turnos,3M5 3T1,12
