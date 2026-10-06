@@ -15,7 +15,10 @@ Dada a oferta de turmas de um semestre da UnB, quantas salas são necessárias, 
 
 O problema é o de **Particionamento de Intervalos** (*interval partitioning*): cada aula é um intervalo de tempo, e queremos distribuir todos os intervalos no menor número de salas de modo que, dentro de uma sala, nenhum par se sobreponha.
 
-(seção a ser detalhada)
+O estudo usa a oferta de graduação da **UnB Gama (FCTE), semestre 2026.2**.
+Os encontros semanais são extraídos dos códigos de horário do SIGAA.
+Além da alocação de todas as aulas em salas, o projeto implementa a seleção
+do maior número de reservas compatíveis para um auditório em um dia.
 
 ## O algoritmo
 
@@ -111,25 +114,140 @@ pedidos que começam a partir de `fim(g)`, obtemos a seleção gulosa inteira.
 
 ## Os dados
 
-(seção a ser detalhada — instruções de download em `data/README.md`)
+A fonte é a [consulta pública de turmas do SIGAA](https://sigaa.unb.br/sigaa/public/turmas/listar.jsf).
+O arquivo usado é `data/raw/turmas_gama_2026_2.csv`, em UTF-8, com cabeçalho
+`turma,disciplina,horario,vagas` e uma linha por turma. A coleta contém
+**229 turmas**, que geram **430 aulas semanais**, sem horários ausentes ou
+inválidos. O recorte usa a unidade ofertante do Gama, mesmo quando o local
+informado para uma turma fica em outro campus.
+
+As instruções de obtenção, normalização e conferência estão em
+[data/README.md](data/README.md). `data/raw/` não é versionado: após clonar,
+obtenha o CSV conforme essas instruções ou use o exemplo de `tests/` para
+experimentar o programa. `carregar_aulas(caminho)` relata em stderr as
+turmas descartadas e as contagens da leitura.
 
 ## Validação
 
-(seção a ser detalhada)
+[validacao.py](validacao.py) executa o guloso e as três estratégias de
+[src/linhas_base.py](src/linhas_base.py): primeira sala compatível na ordem
+de entrada, por menor fim e por maior duração. Confere o contrato das
+alocações, conta conflitos e compara o número de salas com a profundidade.
+
+Também compara guloso, profundidade e busca exata em subamostras de até
+**12 aulas**. Por padrão, são 10 amostras sorteadas com semente 44.
+Os índices sorteados são registrados nos resultados para reprodução.
+Os tempos em milissegundos medem cada algoritmo e variam entre execuções;
+não incluem a conferência de conflitos nem a gravação dos CSVs.
 
 ## Achados
 
-(seção a ser detalhada)
+Na coleta de 2026.2 descrita acima, o guloso e as três linhas de base usam
+**28 salas**, sem conflitos. A profundidade também é 28, comprovando que
+esse total é mínimo para os intervalos e as restrições do modelo.
+Guloso, profundidade e exato concordam nas 10 subamostras padrão.
+
+As linhas de base acertarem nessa coleta não implica otimalidade em todas
+as entradas. Os testes incluem um caso em que a primeira sala compatível
+na ordem de entrada usa três salas, enquanto o guloso usa apenas duas.
+O resultado de 28 salas considera salas intercambiáveis; capacidade,
+equipamentos e deslocamento entre locais não são restrições deste modelo.
 
 ## Instalação
 
 Requer Python 3.10 ou mais novo. Os comandos rodam da raiz do repositório.
+O projeto usa apenas a biblioteca padrão; `requirements.txt` não contém
+dependências externas.
+
+No Windows, com PowerShell:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+```
+
+No Linux ou macOS:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
+
+## Uso
+
+Com o CSV da coleta em `data/raw/turmas_gama_2026_2.csv`, execute:
+
+```bash
+python validacao.py
+```
+
+Para experimentar sem a coleta real, use o CSV fictício versionado:
+
+```bash
+python validacao.py tests/turmas_exemplo.csv --saida resultados/exemplo --amostras 3 --tamanho 6 --semente 44
+```
+
+O exemplo contém horários ausentes e inválidos para demonstrar o relato
+de descartes; apenas as turmas com dados válidos entram na alocação.
+
+As opções disponíveis são:
+
+| Argumento | Finalidade | Padrão |
+|---|---|---|
+| `caminho` | Caminho do CSV de entrada, argumento posicional opcional. | `data/raw/turmas_gama_2026_2.csv` |
+| `--saida` | Diretório onde os CSVs são gravados. | `resultados/` |
+| `--amostras` | Quantidade de subamostras; zero desativa a busca exata. | `10` |
+| `--tamanho` | Máximo de aulas por amostra, entre 1 e 12. | `12` |
+| `--semente` | Semente do sorteio reproduzível das subamostras. | `44` |
+
+O tamanho efetivo de cada amostra é limitado pela quantidade de aulas da
+entrada. Consulte também `python validacao.py --help`.
+
+Por padrão, a execução imprime duas tabelas e salva:
+
+| Arquivo | Conteúdo |
+|---|---|
+| `resumo.csv` | Aulas, salas, limite, excesso de salas, conflitos e tempo por estratégia. |
+| `alocacoes.csv` | Estratégia, índice original da aula, turma, dia, início, fim, vagas e sala. |
+| `subamostras.csv` | Índices e semente do sorteio, resultados do guloso e exato, limite, concordância e tempos. |
+
+Esses arquivos são recriados a cada execução no diretório escolhido.
+`resultados/` não é versionado. No resumo, `excesso = salas - limite` e
+`conflitos` conta pares de aulas sobrepostas na mesma sala. A linha do
+limite tem o campo de conflitos vazio, pois não representa uma alocação.
+O programa termina com código 1 se encontrar conflitos, divergências nas
+subamostras ou um erro que impeça a validação completa.
+
+### Usar os módulos diretamente
+
+```python
+from src.guloso import alocar
+from src.limite import profundidade
+from src.modelo import Aula
+
+aulas = [Aula("A", 2, 480, 600), Aula("B", 2, 540, 660), Aula("C", 2, 600, 720)]
+salas = alocar(aulas)
+print(salas)                 # [0, 1, 0], na ordem original
+print(len(set(salas)))       # 2 salas
+print(profundidade(aulas))   # 2
+```
+
+Para selecionar reservas de um auditório em um único dia:
+
+```python
+from src.modelo import Aula
+from src.selecao import selecionar
+
+pedidos = [Aula("Longa", 2, 480, 720), Aula("A", 2, 480, 600), Aula("B", 2, 600, 720)]
+escolhidos = selecionar(pedidos)
+print([pedido.turma for pedido in escolhidos])  # ['A', 'B']
+```
+
+Para conferir uma instância pequena, use
+`src.exato.minimo_de_salas(aulas)`: retorna um inteiro e aceita até 12 aulas.
+`selecionar` retorna pedidos do tipo `Aula` e exige que todos sejam do mesmo dia.
 
 ## Testes
 
@@ -137,11 +255,35 @@ pip install -r requirements.txt
 python -m unittest discover
 ```
 
+Para executar apenas os testes de um módulo, por exemplo:
+
+```bash
+python -m unittest tests.test_guloso -v
+```
+
+Os testes de dados reais são pulados quando
+`data/raw/turmas_gama_2026_2.csv` não existe. Os demais usam exemplos
+versionados, arquivos temporários e instâncias aleatórias com semente fixa.
+Há comparações do guloso com a profundidade e a busca exata, e da seleção
+de reservas com enumeração de subconjuntos por força bruta.
+
 ## Apresentação
 
-_link do vídeo_
+**Vídeo de apresentação:** ainda não gravado. O link será incluído após
+a gravação e publicação pela equipe.
 
 ## Referências
 
-- KLEINBERG, J.; TARDOS, É. *Algorithm Design*. Pearson, 2005. Seção 4.1.
-- CORMEN, T. H. et al. *Introduction to Algorithms*. 3. ed. Capítulo 16.
+- KLEINBERG, J.; TARDOS, É. *Algorithm Design*. Pearson, 2005. Seção 4.1:
+  seleção e particionamento de intervalos. Material complementar:
+  [Greedy Algorithms I, slides de Kevin Wayne, Princeton](https://www.cs.princeton.edu/~wayne/kleinberg-tardos/pdf/04GreedyAlgorithmsI.pdf).
+- CORMEN, T. H.; LEISERSON, C. E.; RIVEST, R. L.; STEIN, C.
+  [*Introduction to Algorithms*](https://mitpress.mit.edu/9780262033848/introduction-to-algorithms/).
+  3. ed. MIT Press, 2009. Capítulo 16: algoritmos gulosos e seleção de atividades.
+- UNIVERSIDADE DE BRASÍLIA. [Consulta pública de turmas do SIGAA](https://sigaa.unb.br/sigaa/public/turmas/listar.jsf).
+  Fonte da oferta de graduação do Gama em 2026.2; conteúdo recebido em 05/10/2026.
+- DESIGN UNB. [Códigos das aulas SIGAA](https://design.unb.br/codigos-aulas-sigaa/).
+  Referência para dias, turnos e horários. A adaptação do intervalo N1 está
+  documentada em [src/horarios.py](src/horarios.py).
+- PYTHON SOFTWARE FOUNDATION. [Documentação de `heapq`](https://docs.python.org/3.10/library/heapq.html).
+  Referência para o heap mínimo usado na alocação de salas.
